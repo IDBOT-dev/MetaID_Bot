@@ -6,6 +6,7 @@ import {
 import { Context, FullContext } from '../interfaces/context.interface'
 import { HELLO_SCENE_ID, WIZARD_SCENE_ID } from '../app.constants'
 import { UpdateType } from '../common/decorators/update-type.decorator'
+import { createBuzz } from 'src/lib/buzz'
 
 @Update()
 export class MetaidUpdate {
@@ -41,8 +42,8 @@ export class MetaidUpdate {
   // 通过正则表达式匹配参数
   @Command(/buzz/)
   async onBuzzCommand(@Ctx() ctx: FullContext): Promise<void> {
-    console.log(ctx.payload)
-    await ctx.reply(ctx.payload)
-    // await ctx.reply(`You said: ${value}`)
+    const res = await createBuzz(ctx.payload)
+
+    await ctx.reply(res)
   }
 }
