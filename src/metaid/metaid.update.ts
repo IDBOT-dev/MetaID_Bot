@@ -7,6 +7,7 @@ import { Context, FullContext } from '../interfaces/context.interface'
 import { HELLO_SCENE_ID, WIZARD_SCENE_ID } from '../app.constants'
 import { UpdateType } from '../common/decorators/update-type.decorator'
 import { createBuzz } from 'src/lib/buzz'
+import { editName } from 'src/lib/metaid'
 
 @Update()
 export class MetaidUpdate {
@@ -36,6 +37,13 @@ export class MetaidUpdate {
   @Command('createmetaid')
   async onCreateMetaIdCommand(@Ctx() ctx: Context): Promise<void> {
     await ctx.reply('Please enter your MetaID')
+  }
+
+  @Command('editname')
+  async onEditNameCommand(@Ctx() ctx: FullContext): Promise<void> {
+    const res = await editName(ctx.payload)
+
+    await ctx.reply(res)
   }
 
   // 这个/buzz 命令需要有参数，形如/buzz hello
