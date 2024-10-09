@@ -1,7 +1,5 @@
-import * as bip39 from 'bip39'
-import BIP32Factory from 'bip32'
 import * as ecc from 'tiny-secp256k1'
-import { payments, initEccLib, Psbt, script, crypto } from 'bitcoinjs-lib'
+import { initEccLib, payments, Psbt, Signer } from 'bitcoinjs-lib'
 import {
   isTestnet,
   LEAF_VERSION_TAPSCRIPT,
@@ -12,28 +10,20 @@ import {
 import { broadcast, fetchFeeRate, fetchUtxos } from 'src/lib/services/metalet'
 import { MetaIdData } from 'src/lib/types'
 import { createScript } from 'src/lib/pin'
+import { toOutputScript } from 'bitcoinjs-lib/src/address'
 
-export async function createBuzz(content: string) {
+export async function createBuzz(
+  address: string,
+  publicKey: string,
+  signer: Signer,
+  content: string,
+) {
   initEccLib(ecc)
-  const bip32 = BIP32Factory(ecc)
 
-  const mnemonic = process.env.MNEMONIC
-  const seed = bip39.mnemonicToSeedSync(mnemonic)
-  const rootNode = bip32.fromSeed(seed, typedNetwork)
-
-  const childNode = rootNode.derivePath("m/86'/0'/0'/0/1")
-  const internalPubkey = toXOnly(childNode.publicKey)
-  const tweakedSigner = childNode.tweak(
-    crypto.taggedHash('TapTweak', internalPubkey),
-  )
-  const tweakedPubkey = tweakedSigner.publicKey
+  const internalPubkey = toXOnly(Buffer.from(publicKey, 'hex'))
+  const tweakedPubkey = signer.publicKey
   const tweakedXOnly = toXOnly(tweakedPubkey)
-
-  const { address, output } = payments.p2tr({
-    internalPubkey,
-    network: typedNetwork,
-  })
-
+  const output = toOutputScript(address, typedNetwork)
   const utxos = await fetchUtxos(address)
   console.log({ utxos })
 
@@ -82,14 +72,14 @@ export async function createBuzz(content: string) {
     address: address,
     value: 546,
   })
-  commitFakePsbt.signInput(0, tweakedSigner).finalizeAllInputs()
+  commitFakePsbt.signInput(0, signer).finalizeAllInputs()
   const commitFakeTx = commitFakePsbt.extractTransaction(true)
   // get size of the transaction
   const commitFakeTxSize = commitFakeTx.virtualSize()
 
   // 获取费率，计算手续费
   const feeRate = await fetchFeeRate()
-  const fee = feeRate * commitFakeTxSize
+  const fee = feeRate > 1 ? feeRate * commitFakeTxSize : commitFakeTxSize + 1 // prevent fee rate too low
   const changeValue = utxos[0].satoshi - 546 - fee
 
   // 构建真正交易
@@ -120,7 +110,7 @@ export async function createBuzz(content: string) {
   }
 
   // 签名
-  commitPsbt.signInput(0, tweakedSigner).finalizeAllInputs()
+  commitPsbt.signInput(0, signer).finalizeAllInputs()
   const commitTx = commitPsbt.extractTransaction()
   const commitTxid = commitTx.getId()
 
@@ -164,10 +154,7 @@ export async function createBuzz(content: string) {
     address,
     value: 546,
   })
-  revealFakePsbt
-    .signInput(0, tweakedSigner)
-    .signInput(1, tweakedSigner)
-    .finalizeAllInputs()
+  revealFakePsbt.signInput(0, signer).signInput(1, signer).finalizeAllInputs()
   const revealFakeTx = revealFakePsbt.extractTransaction(true)
   // get size of the transaction
   const revealFakeTxSize = revealFakeTx.virtualSize()
@@ -184,10 +171,7 @@ export async function createBuzz(content: string) {
     })
   }
 
-  revealPsbt
-    .signInput(0, tweakedSigner)
-    .signInput(1, tweakedSigner)
-    .finalizeAllInputs()
+  revealPsbt.signInput(0, signer).signInput(1, signer).finalizeAllInputs()
   const revealTx = revealPsbt.extractTransaction()
 
   const tx1 = await broadcast(commitTx.toHex())

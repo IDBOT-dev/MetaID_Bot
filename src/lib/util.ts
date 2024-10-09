@@ -24,6 +24,10 @@ export const ticketHost = isTestnet
   ? 'https://api.ticket.fans/ticket-api-testnet'
   : 'https://api.ticket.fans/ticket-api'
 
+export const manHost = isTestnet
+  ? 'https://man-test.metaid.io'
+  : 'https://man.metaid.io'
+
 export const ticketMessage = 'ticket.fans'
 
 export const AES_KEY = isTestnet
@@ -56,4 +60,22 @@ export function determineAddressInfo(address: string): string {
     return 'p2pkh'
   }
   return 'unknown'
+}
+
+export const MESSAGE = 'ticket.fans'
+export const SIGHASH_ALL = 0x01
+export const FLAG = 'metaid'
+export const SERVICE_FEE = '1999'
+export const CREATE_THRESHOLD_POINTS = 100
+export const PAGE_SIZE = 14
+export const MEMPOOL_HOST = 'https://mempool.space'
+export const MAX_MARKET_CAP = '1.25 BTC'
+export const TG_LINK = 'https://t.me/Ticketdotfans'
+export const TWITTER_LINK = 'https://x.com/ticketdotfans'
+export const TUTORIAL_LINK = 'https://ticket-fans.gitbook.io/ticket.fans'
+
+export function log(things: any) {
+  console.log(things)
+
+  return things
 }

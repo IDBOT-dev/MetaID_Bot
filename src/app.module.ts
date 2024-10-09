@@ -6,9 +6,11 @@ import { sessionMiddleware } from './middleware/session.middleware'
 import { GreeterBotName, MetaidBotName } from './app.constants'
 import { MetaidModule } from 'src/metaid/metaid.module'
 import { TicketModule } from 'src/ticket/ticket.module'
+import { ConfigModule } from '@nestjs/config'
 
 @Module({
   imports: [
+    ConfigModule.forRoot(),
     TelegrafModule.forRoot({
       token: '7937310890:AAHu6tA1zzbzHybcg5Vr6udW8l46TrPioWs',
       include: [EchoModule],

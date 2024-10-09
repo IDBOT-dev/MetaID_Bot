@@ -1,5 +1,5 @@
-import { MetaidInfo, Utxo } from 'src/lib/types'
-import { literalNetwork } from 'src/lib/util'
+import { MetaidDetail, Utxo } from 'src/lib/types'
+import { literalNetwork, manHost } from 'src/lib/util'
 
 export async function fetchUtxos(address: string): Promise<Utxo[]> {
   return await fetch(
@@ -16,6 +16,7 @@ export async function fetchFeeRate(): Promise<number> {
     .then((res) => res.json())
     .then(({ data: { list } }) => list)
     .then((list) => list.find((item) => item.title === 'Avg')!.feeRate)
+    .then((feeRate) => Math.max(feeRate, 2))
 }
 
 export async function broadcast(tx: string): Promise<any> {
@@ -35,10 +36,8 @@ export async function broadcast(tx: string): Promise<any> {
     .then(({ data }) => data)
 }
 
-export async function fetchMetaid(address: string): Promise<MetaidInfo> {
-  return await fetch(
-    `https://www.metalet.space/wallet-api/v3/address/metaid/info?net=${literalNetwork}&address=${address}`,
-  )
+export async function fetchMetaid(address: string): Promise<MetaidDetail> {
+  return await fetch(`${manHost}/api/info/address/${address}`)
     .then((res) => res.json())
     .then(({ data }) => data)
 }

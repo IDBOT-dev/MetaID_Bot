@@ -1,23 +1,18 @@
 import {
-  BuildBuyClubTicketPsbtParams,
   BuyClubTicketPreRes,
   ClubTicketInfo,
+  Cred,
+  MRC20Utxo,
+  SellClubTicketPreRes,
 } from 'src/lib/types'
-import {
-  AES_KEY,
-  determineAddressInfo,
-  ticketHost,
-  typedNetwork,
-} from 'src/lib/util'
+import { AES_KEY, log, ticketHost } from 'src/lib/util'
 import * as CryptoJS from 'crypto-js'
-import { initEccLib } from 'bitcoinjs-lib'
-import * as ecc from 'tiny-secp256k1'
-import { fetchUtxos } from 'src/lib/services/metalet'
-import { getPublicKey } from 'src/lib/metaid'
-import { toOutputScript } from 'bitcoinjs-lib/src/address'
-import Decimal from 'decimal.js'
 
 async function decodeData({ data, e, ws }) {
+  if (!e || !ws) {
+    return data
+  }
+
   const { wordListMap, wordSortListMap } = await getAesWord()
   if (!wordListMap || !wordSortListMap) {
     throw new Error('wordListMap or wordSortListMap is null')
@@ -117,36 +112,119 @@ export async function fetchClubTicketDetail(
   return response
 }
 
-export const buildBuyClubTicketPsbt = async (
-  order: BuyClubTicketPreRes,
-  address: string,
-  feeRate: number,
-  extract: boolean = true,
-  signPsbt: boolean = true,
-) => {
-  initEccLib(ecc)
-  const { minerFee } = order
-  const utxos = (await fetchUtxos(address)).sort(
-    (a, b) => b.satoshi - a.satoshi,
-  )
-  const addressType = determineAddressInfo(address).toUpperCase()
-  const publicKey = await getPublicKey()
-  const script = toOutputScript(address, typedNetwork)
-  const ret = await buildTx<BuildBuyClubTicketPsbtParams>(
-    utxos,
-    new Decimal(minerFee),
-    feeRate,
+export const buyClubTicketCommit = async (
+  params: {
+    orderId: string
+    commitTxOutIndex: number
+    commitTxRaw: string
+  },
+  options?: { [key: string]: any },
+): Promise<{
+  commitTxId: string
+  orderId: string
+  revealTxId: string
+  ticketId: string
+  txId: string
+}> => {
+  const response = await fetch(
+    `${ticketHost}/api/v1/ticket/club/trade/buy/commit`,
     {
-      addressType,
-      address,
-      publicKey: Buffer.from(publicKey, 'hex'),
-      script,
-      ...order,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options || {}),
+      },
+      body: JSON.stringify(params),
     },
-    address,
-    _buildBuyClubTicketPsbt,
-    extract,
-    signPsbt,
   )
-  return ret
+    .then((res) => res.json())
+    .then(({ data, e, ws }) => decodeData({ data, e, ws }))
+
+  return response
+}
+
+export const sellClubTicketPre = async (
+  params: {
+    address: string
+    networkFeeRate: number
+    ticketId: string
+    assetAmount?: string
+    priceAmount?: string
+    assetUtxoIds: string[]
+  },
+  options?: { [key: string]: any },
+): Promise<SellClubTicketPreRes> => {
+  const response = await fetch(
+    `${ticketHost}/api/v1/ticket/club/trade/sell/pre`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options || {}),
+      },
+      body: JSON.stringify(params),
+    },
+  )
+    .then((res) => res.json())
+    .then(({ data, e, ws }) => decodeData({ data, e, ws }))
+
+  return response
+}
+
+export const fetchAssetUtxos = async (
+  params: {
+    address?: string
+    tickId?: string
+  },
+  cred: Cred,
+): Promise<MRC20Utxo[]> => {
+  const response = await fetch(
+    `${ticketHost}/api/v1/common/mrc20/address/utxo?` +
+      new URLSearchParams({ ...params, cursor: '0', size: '100' }),
+    {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Signature': cred['X-Signature'],
+        'X-Public-Key': cred['X-Public-Key'],
+      },
+    },
+  )
+    .then((res) => res.json())
+    .then(({ data, e, ws }) => decodeData({ data, e, ws }))
+    .then(({ list }) => list)
+  return response
+}
+
+export const sellClubTicketCommit = async (
+  params: {
+    orderId: string
+    commitTxRaw: string
+    commitTxOutIndex: number
+    revealPrePsbtRaw: string
+  },
+  options?: { [key: string]: any },
+): Promise<{
+  orderId: string
+  txId: string
+  commitTxId: string
+  revealTxId: string
+  ticketId: string
+}> => {
+  const response = await fetch(
+    `${ticketHost}/api/v1/ticket/club/trade/sell/commit`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options || {}),
+      },
+      body: JSON.stringify(params),
+    },
+  )
+    .then((res) => res.json())
+    .then(log)
+    .then(({ data, e, ws }) => decodeData({ data, e, ws }))
+
+  return response
 }
