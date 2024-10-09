@@ -1,7 +1,8 @@
 import * as bip39 from 'bip39'
 import BIP32Factory from 'bip32'
 import * as ecc from 'tiny-secp256k1'
-import { payments, initEccLib, Psbt, script, crypto } from 'bitcoinjs-lib'
+import * as bitcore from 'bitcore-lib'
+import { payments, initEccLib, Psbt, crypto } from 'bitcoinjs-lib'
 import {
   isTestnet,
   LEAF_VERSION_TAPSCRIPT,
@@ -9,11 +10,17 @@ import {
   toXOnly,
   typedNetwork,
 } from 'src/lib/util'
-import { broadcast, fetchFeeRate, fetchUtxos } from 'src/lib/services/metalet'
-import { MetaIdData } from 'src/lib/types'
+import {
+  broadcast,
+  fetchBalance,
+  fetchFeeRate,
+  fetchMetaid,
+  fetchUtxos,
+} from 'src/lib/services/metalet'
+import { Cred, MetaIdData } from 'src/lib/types'
 import { createScript } from 'src/lib/pin'
 
-export async function createBuzz(content: string) {
+export async function editName(name: string): Promise<string> {
   initEccLib(ecc)
   const bip32 = BIP32Factory(ecc)
 
@@ -37,13 +44,15 @@ export async function createBuzz(content: string) {
   const utxos = await fetchUtxos(address)
   console.log({ utxos })
 
-  // 写数据
+  // 写名字
+  const hasName = await checkNameExists(address)
+  const operation = hasName ? 'modify' : 'create'
   const metaidData: MetaIdData = {
-    body: content,
-    path: '/protocols/simplebuzz',
+    body: name,
+    path: '/info/name',
     flag: 'metaid',
     version: '1.0.0',
-    operation: 'create',
+    operation,
     contentType: 'text/plain',
     encryption: '0',
     encoding: 'utf-8',
@@ -195,6 +204,79 @@ export async function createBuzz(content: string) {
   const tx2 = await broadcast(revealTx.toHex())
   console.log({ tx1, tx2 })
 
-  const bitbuzzHost = isTestnet ? 'testnet.bitbuzz.io' : 'bitbuzz.io'
-  return `https://${bitbuzzHost}/buzz/${tx2}i0`
+  const manBrowserHost = isTestnet ? 'man-test.metaid.io' : 'man.metaid.io'
+  return `https://${manBrowserHost}/pin/${tx2}i0`
+}
+
+async function checkNameExists(address: string): Promise<boolean> {
+  const metaidInfo = await fetchMetaid(address)
+  return !!metaidInfo.name
+}
+
+export async function getAddress() {
+  initEccLib(ecc)
+  const bip32 = BIP32Factory(ecc)
+
+  const mnemonic = process.env.MNEMONIC
+  const seed = bip39.mnemonicToSeedSync(mnemonic)
+  const rootNode = bip32.fromSeed(seed, typedNetwork)
+
+  const childNode = rootNode.derivePath("m/86'/0'/0'/0/1")
+  const internalPubkey = toXOnly(childNode.publicKey)
+
+  const { address } = payments.p2tr({
+    internalPubkey,
+    network: typedNetwork,
+  })
+
+  return address
+}
+
+export async function getPublicKey() {
+  initEccLib(ecc)
+  const bip32 = BIP32Factory(ecc)
+
+  const mnemonic = process.env.MNEMONIC
+  const seed = bip39.mnemonicToSeedSync(mnemonic)
+  const rootNode = bip32.fromSeed(seed, typedNetwork)
+
+  const childNode = rootNode.derivePath("m/86'/0'/0'/0/1")
+
+  return childNode.publicKey.toString('hex')
+}
+
+export async function getName() {
+  const address = await getAddress()
+  const metaidInfo = await fetchMetaid(address)
+
+  return metaidInfo.name
+}
+
+export async function getBalance() {
+  const address = await getAddress()
+  const balance = await fetchBalance(address)
+
+  return balance
+}
+
+export async function getCred(message: string): Promise<Cred> {
+  initEccLib(ecc)
+  const bip32 = BIP32Factory(ecc)
+
+  const mnemonic = process.env.MNEMONIC
+  const seed = bip39.mnemonicToSeedSync(mnemonic)
+  const rootNode = bip32.fromSeed(seed, typedNetwork)
+
+  const childNode = rootNode.derivePath("m/86'/0'/0'/0/1")
+  const wif = childNode.toWIF()
+  // @ts-ignore
+  const privateKey = bitcore.PrivateKey.fromWIF(wif)
+  const pubkey = childNode.publicKey.toString('hex')
+  const messageObj = new bitcore.Message(message)
+  const signature = messageObj.sign(privateKey)
+
+  return {
+    'X-Signature': signature,
+    'X-Public-Key': pubkey,
+  }
 }

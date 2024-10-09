@@ -5,6 +5,7 @@ import { GreeterModule } from './greeter/greeter.module'
 import { sessionMiddleware } from './middleware/session.middleware'
 import { GreeterBotName, MetaidBotName } from './app.constants'
 import { MetaidModule } from 'src/metaid/metaid.module'
+import { TicketModule } from 'src/ticket/ticket.module'
 
 @Module({
   imports: [
@@ -27,12 +28,13 @@ import { MetaidModule } from 'src/metaid/metaid.module'
       useFactory: () => ({
         token: '8066046070:AAEpmWYsak50AkvJYGRySySLnJRfiJFtyq4',
         middlewares: [sessionMiddleware],
-        include: [MetaidModule],
+        include: [MetaidModule, TicketModule],
       }),
     }),
     EchoModule,
     GreeterModule,
     MetaidModule,
+    TicketModule,
   ],
 })
 export class AppModule {}
