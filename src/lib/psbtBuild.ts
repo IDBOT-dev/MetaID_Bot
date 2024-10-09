@@ -15,6 +15,8 @@ import {
   typedNetwork,
 } from './util'
 import { Tx, Utxo } from 'src/lib/types'
+import { fetchUtxos } from 'src/lib/services/metalet'
+import { getAddress } from 'src/lib/metaid'
 
 const TX_EMPTY_SIZE = 4 + 1 + 1 + 4
 const TX_INPUT_BASE = 32 + 4 + 1 + 4 // 41
@@ -49,11 +51,6 @@ function selectUTXOs(utxos: Utxo[], targetAmount: Decimal) {
 
 function getTotalSatoshi(utxos: Utxo[]) {
   return utxos.reduce((total, utxo) => total.add(utxo.satoshis), new Decimal(0))
-}
-function calculateEstimatedFee(psbt: Psbt, feeRate: number) {
-  const tx = psbt.extractTransaction()
-  const size = tx.virtualSize()
-  return new Decimal(size).mul(feeRate)
 }
 type PsbtInput = (typeof Psbt.prototype.data.inputs)[0]
 export interface TransactionOutput {
@@ -114,7 +111,7 @@ export function calcFee(psbt: Psbt, feeRate: number) {
   const outputs = psbt.txOutputs
 
   const bytes = transactionBytes(inputs, outputs)
-  console.log({ bytes })
+
   return new Decimal(bytes).mul(feeRate)
 }
 
@@ -276,42 +273,9 @@ export async function fillInternalKey({
 }
 
 export const getUtxos = async (address: string) => {
-  const addressType = determineAddressInfo(address).toUpperCase()
-  const utxos = await window.metaidwallet.btc.getUtxos({
-    needRawTx: ['P2PKH'].includes(addressType),
-    useUnconfirmed: true,
-  })
-  console.log(utxos, 'utxos')
-  for (let i = 0; i < utxos.length; i++) {
-    const { txId, vout } = utxos[i]
-    if (!utxos[i].confirmed) {
-      const ret = await window.metaidwallet.btc.addSafeUtxo({
-        address,
-        unspentOutput: `${txId}:${vout}`,
-      })
-      console.log(ret, 'addSafeUtxo')
-    }
-  }
-  return utxos
-}
+  const utxos = await fetchUtxos(address)
 
-export const addUtxoSafe = async (
-  address: string,
-  utxos: { txId: string; vout: number }[],
-) => {
-  console.log(utxos, 'addUtxoSafe')
-  for (let i = 0; i < utxos.length; i++) {
-    try {
-      const { txId, vout } = utxos[i]
-      const ret = await window.metaidwallet.btc.addSafeUtxo({
-        address,
-        unspentOutput: `${txId}:${vout}`,
-      })
-      console.log(ret, 'addUtxoSafe')
-    } catch (err) {
-      console.log(err)
-    }
-  }
+  return utxos
 }
 
 export function toXOnly(pubKey: Buffer) {
@@ -345,18 +309,7 @@ export async function updateInputKey({
   return payInput
 }
 
-export const getUtxoBalance = async (address?: string) => {
-  if (!address) {
-    address = await window.metaidwallet.btc.getAddress()
-  }
+export const getUtxoBalance = async (address: string) => {
   const utxos = await getUtxos(address)
   return utxos.reduce((acc, cur) => acc + cur.satoshis, 0)
-}
-
-export const checkWalletAddress = async (address: string) => {
-  const _address = await window.metaidwallet.btc.getAddress()
-  if (address !== _address) {
-    return { status: false, message: 'Wallet address is not matched' }
-  }
-  return { status: true }
 }

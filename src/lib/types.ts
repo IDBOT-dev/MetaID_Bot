@@ -1,3 +1,5 @@
+import type { Signer } from 'bitcoinjs-lib'
+
 export type Utxo = {
   confirmed: boolean
   inscriptions: null | string // Assuming inscriptions could be a string or null
@@ -6,6 +8,7 @@ export type Utxo = {
   vout: number
   outputIndex: number
   satoshis: number
+  rawTx?: string
 }
 
 export type MetaFlag = 'metaid' | 'testid'
@@ -21,11 +24,6 @@ export type MetaIdData = {
   contentType?: string
   encryption?: Encryption
   encoding?: BufferEncoding
-}
-
-export type MetaidInfo = {
-  name: string
-  avatar: string
 }
 
 export type BuyClubTicketPreRes = {
@@ -92,9 +90,72 @@ type BaseBuildParams = {
   address: string
   publicKey: Buffer
   script: Buffer
+  signer: Signer
 }
 
 export type Tx = {
   address: string
   value: number
+}
+
+export type SellClubTicketPreRes = {
+  minerFee: number
+  orderId: string
+  orderType: number
+  priceAmount: number
+  psbtRaw: string
+  receiveAddress: string
+  revealInputIndex: number
+  serviceFee: number
+  totalAmount: number
+  totalFee: number
+  minerGas: number
+  minerOutValue: number
+}
+
+export type MRC20Utxo = {
+  chain: 'btc'
+  blockHeight: number
+  address: string
+  satoshi: number
+  satoshis: number
+  scriptPk: string
+  txId: string
+  vout: number
+  outputIndex: number
+  mrc20s: MRC20UtxoChild[]
+  timestamp: number
+  fromAddress: string
+}
+
+export type MRC20UtxoChild = {
+  tick: string
+  mrc20Id: string
+  txPoint: string
+  amount: string
+  decimals: string
+  fromAddress?: string
+  blockHeight?: number
+}
+
+export type BuildSellClubTicketPsbtParams = BaseBuildParams &
+  SellClubTicketPreRes
+
+export type MetaidDetail = {
+  chainName: 'btc'
+  number: number
+  metaid: string
+  name: string
+  nameId: string
+  address: string
+  avatar: string
+  avatarId: string
+  bio: string
+  bioId: string
+  soulbondToken: string
+  isInit: boolean
+  followCount: number
+  pdv: number
+  fdv: number
+  unconfirmed: string
 }
