@@ -15,6 +15,7 @@ import {
   BuildSellClubTicketPsbtParams,
   BuyClubTicketPreRes,
   ClubTicketInfo,
+  Cred,
   MRC20Utxo,
   MRC20UtxoChild,
   SellClubTicketPreRes,
@@ -40,16 +41,13 @@ export async function buyTicket(
   address: string,
   publicKey: string,
   signer: Signer,
+  cred: Cred,
 ): Promise<string> {
   const [tick, priceInBtc] = payload.split(' ')
-  if (!tick || !priceInBtc) {
-    return 'Invalid'
-  }
 
   const ticketDetail = await fetchClubTicketDetail(tick)
 
   const feeRate = await fetchFeeRate()
-  const cred = await getCred(ticketMessage)
 
   // 1
   const preOrder = await buyClubTicketPre(
@@ -175,19 +173,15 @@ export async function sellTicket(
   address: string,
   publicKey: string,
   signer: Signer,
+  cred: Cred,
 ): Promise<string> {
   const [tick, priceInBtc] = payload.split(' ')
-  if (!tick || !priceInBtc) {
-    return 'Invalid'
-  }
 
   const ticketDetail = await fetchClubTicketDetail(tick)
 
   const feeRate = await fetchFeeRate()
-  const cred = await getCred(ticketMessage)
 
   // 1
-
   const assetUtxoIds = []
   const assetUtxos = await fetchAssetUtxos(
     {

@@ -89,6 +89,7 @@ export const buyClubTicketPre = async (
     },
   )
     .then((res) => res.json())
+    .then(log)
     .then(({ data, e, ws }) => decodeData({ data, e, ws }))
 
   return response

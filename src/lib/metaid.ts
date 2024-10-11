@@ -75,7 +75,11 @@ export function getSigner(mneid: number, path: number) {
   return tweakedSigner
 }
 
-export async function getCred(message: string): Promise<Cred> {
+export async function getCred(
+  mneid: number,
+  path: number,
+  message: string,
+): Promise<Cred> {
   initEccLib(ecc)
   const bip32 = BIP32Factory(ecc)
 
@@ -83,7 +87,7 @@ export async function getCred(message: string): Promise<Cred> {
   const seed = bip39.mnemonicToSeedSync(mnemonic)
   const rootNode = bip32.fromSeed(seed, typedNetwork)
 
-  const childNode = rootNode.derivePath("m/86'/0'/0'/0/1")
+  const childNode = rootNode.derivePath(`m/86'/0'/0'/0/${path}`)
   const wif = childNode.toWIF()
   // @ts-ignore
   const privateKey = bitcore.PrivateKey.fromWIF(wif)
