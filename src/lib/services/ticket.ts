@@ -46,9 +46,9 @@ function decrypt(
   const key = _key
     ? CryptoJS.enc.Hex.parse(_key)
     : generateKeyFromPassphrase(passphrase)
-  // 解码Base64
+
   const encryptedData = CryptoJS.enc.Base64.parse(cryptoText)
-  // 提取IV
+ 
   const iv = key.clone()
   const decrypted = CryptoJS.AES.decrypt(
     { ciphertext: encryptedData } as any,

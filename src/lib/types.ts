@@ -9,6 +9,7 @@ export type Utxo = {
   outputIndex: number
   satoshis: number
   rawTx?: string
+  preTx?:any
 }
 
 export type MetaFlag = 'metaid' | 'testid'
@@ -158,4 +159,13 @@ export type MetaidDetail = {
   pdv: number
   fdv: number
   unconfirmed: string
+}
+
+export type Attachment={
+  file_id: string,
+  file_unique_id:string,
+  file_size:number
+  width:number
+  height:number
+  url?:string
 }

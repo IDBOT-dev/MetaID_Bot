@@ -1,5 +1,7 @@
 import { networks } from 'bitcoinjs-lib'
-
+import Decimal from 'decimal.js'
+import {MEDIA_TYPE} from 'src/app.constants'
+import { Attachment } from './types'
 export const literalNetwork = process.env.NETWORK || 'testnet'
 export const isTestnet = literalNetwork === 'testnet'
 export const typedNetwork =
@@ -20,19 +22,33 @@ export async function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-export const ticketHost = isTestnet
-  ? 'https://api.ticket.fans/ticket-api-testnet'
-  : 'https://api.ticket.fans/ticket-api'
+export function formatHTML(list:Array<{command:string,desc:string,value?:string,}>,optional?:Array<{command:string,desc:string,}>){
+   let htmlRes=`Commands:\n`
+    for(let i of list){
+          const value = i.value ?? ''
+          const str=`${i.command}   ${value}   ${i.desc}\n\n`
+       
+          htmlRes +=`${str}` 
+    }
+    if(optional.length){
+      htmlRes +=`Options:\n`
+      for(let j of optional){
+        const str=`${j.command}   ${j.desc}\n\n` 
+        htmlRes +=`${str}`
+  }
+    }
+    console.log("htmlRes",htmlRes)
+    return htmlRes
 
-export const manHost = isTestnet
-  ? 'https://man-test.metaid.io'
-  : 'https://man.metaid.io'
+}
+
+export const ticketHost = process.env.TICKET_HOST
+
+export const manHost = process.env.MAN_HOST
 
 export const ticketMessage = 'ticket.fans'
 
-export const AES_KEY = isTestnet
-  ? '3560d934fc3e7fcaf115a53eddff60484c2082ca334af56382ba34f392680f42'
-  : '9e09058386b738d694d8a2dee061cb57905351a6916e1df41e0ffc9e34540771'
+export const AES_KEY = process.env.AES_KEY
 
 export function determineAddressInfo(address: string): string {
   if (address.startsWith('bc1q')) {
@@ -79,3 +95,70 @@ export function log(things: any) {
 
   return things
 }
+
+export function mediaType(message:Object){
+    const isPhoto = message.hasOwnProperty(MEDIA_TYPE.PHOTO) 
+    const isVideo = message.hasOwnProperty(MEDIA_TYPE.VIDEO)
+    const isAudio = message.hasOwnProperty(MEDIA_TYPE.AUDIO)
+    if(isPhoto){
+      return MEDIA_TYPE.PHOTO
+    }else if(isVideo){
+      return MEDIA_TYPE.VIDEO
+    }else if(isAudio){
+      return MEDIA_TYPE.AUDIO
+    }else{
+      return MEDIA_TYPE.UNKNOW
+    }
+
+
+}
+
+export async function getImgData(picPath:string){
+  try {
+      const res= await fetch(picPath)
+      const result=await res.arrayBuffer()
+      const blob=await res.blob()
+      const data=new Uint8Array(result)
+      return {
+        data:data,
+        mime:blob.type
+      }
+  } catch (error) {
+    throw new Error(error.messsage)
+    
+  }
+}
+
+
+export function selectUTXOs(utxos, targetAmount) {
+  let totalAmount = new Decimal(0)
+  const selectedUtxos = []
+  for (const utxo of utxos) {
+    selectedUtxos.push(utxo)
+    totalAmount = totalAmount.add(utxo.satoshis)
+
+    if (totalAmount.gte(targetAmount)) {
+      break
+    }
+  }
+
+  if (totalAmount.lt(targetAmount)) {
+    throw new Error('Insufficient funds to reach the target amount')
+  }
+
+  return selectedUtxos
+}
+
+export function getTotalSatoshi(utxos) {
+  return utxos.reduce(
+    (total, utxo) => total.add(utxo.satoshis),
+    new Decimal(0),
+  )
+}
+
+export function inputIsAddress(str:string){
+    const isAddress=str.startsWith('m') || str.startsWith('n') || str.startsWith('bc1p') || str.startsWith('tb1p') || str.length == 33 || str.length == 34
+    return isAddress
+  }
+
+

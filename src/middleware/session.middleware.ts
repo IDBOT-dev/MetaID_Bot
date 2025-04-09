@@ -1,3 +1,4 @@
 import { session } from 'telegraf'
 
-export const sessionMiddleware = session()
+export const sessionMiddleware: ReturnType<typeof session> = session()//+
+
