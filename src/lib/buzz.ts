@@ -1,36 +1,139 @@
 import * as ecc from 'tiny-secp256k1'
 import { initEccLib, payments, Psbt, Signer } from 'bitcoinjs-lib'
+import {getPrivateKey} from 'src/lib/metaid'
 import {
   isTestnet,
   LEAF_VERSION_TAPSCRIPT,
   sleep,
   toXOnly,
   typedNetwork,
+  literalNetwork
 } from 'src/lib/util'
-import { broadcast, fetchFeeRate, fetchUtxos } from 'src/lib/services/metalet'
-import { MetaIdData } from 'src/lib/types'
+// import * as bitcore from 'bitcore-lib'
+ import *  as bitcoin from 'bitcoinjs-lib';
+import { broadcast, fetchFeeRate, fetchUtxos ,fetchUtxosRaw} from 'src/lib/services/metalet'
+import { MetaIdData,Attachment } from 'src/lib/types'
 import { createScript } from 'src/lib/pin'
-import { toOutputScript } from 'bitcoinjs-lib/src/address'
+// import { toOutputScript } from 'bitcoinjs-lib/src/address'
+import {type ECPairInterface}  from 'ecpair'
+import {MvcWallet} from 'src/lib/mvc/wallet'
+import {API_NET,API_TARGET} from 'meta-contract'
+import {MVC_FEE,HOST} from 'src/app.constants'
 
+    
 export async function createBuzz(
-  address: string,
-  publicKey: string,
-  signer: Signer,
+  mneid:number,
+  path:number,
   content: string,
+  freeOnMvc:boolean,
+  attachments?:Attachment[]
 ) {
+ try {
+  const network=literalNetwork == 'testnet' ? API_NET.TEST : API_NET.MAIN
+  const walletInstance=new MvcWallet({
+    wif:getPrivateKey(mneid,path),
+    network:network,
+    feeb:MVC_FEE,
+    apiTarget:API_TARGET.CYBER3
+  })
+
+  let hasFreeUtxo=freeOnMvc ? await walletInstance.checkFreeDetail() : []
+  let utxo
+  const body={
+    content:content,
+    contentType:'text/plain',
+    
+  }
+ 
+
+    const metaidData: MetaIdData = {
+      body: JSON.stringify(body),
+      path: `${HOST}:/protocols/simplebuzz`,
+      flag: 'metaid',
+      version: '1.0.0',
+      operation: 'create',
+      contentType: 'text/plain',
+      encryption: '0',
+      encoding: 'utf-8',
+    }
+  if(hasFreeUtxo.length){
+    utxo=hasFreeUtxo
+  }else{
+    utxo=await walletInstance.getUseableUtxos()
+  }
+
+   if(!utxo.length){
+    throw new Error(`Insufficient balance. You can use the /getaddress command to get the MVC address for recharging and continue operations.`)
+   }
+
+   const bitbuzzHost = isTestnet ? 'testnet.bitbuzz.io' : 'bitbuzz.io'
+   if(hasFreeUtxo){
+    const {txId}=await walletInstance.createPinForFree(metaidData,utxo)
+    if(!txId){
+      throw new Error(`Broadcast failed`)
+     }
+    return {
+      address:walletInstance.rootAddress,
+      txid:txId,
+      pinid:`${txId}i0`,
+      chain:'mvc'
+    }  
+   }else{
+    const {txid}=await walletInstance.createPin(metaidData,utxo)
+   if(!txid){
+    throw new Error(`Broadcast failed`)
+   }
+   return {
+    address:walletInstance.rootAddress,
+    txid:txid,
+    pinid:`${txid}i0`,
+    chain:'mvc'
+  }  
+   }
+
+ } catch (error) {
+  throw new Error(error)
+ }
+   
+  
+
+}
+
+export async function createBuzzForBTC(
+  legacyInfo:{
+    address: string,
+  publicKey: string,
+  signer: ECPairInterface
+  },
+  taprootInfo:{
+    taprootAddress: string,
+    taprootPublicKey: string,
+    taprootSigner: Signer,
+  },
+  content: string,
+  attachments?:Attachment[]
+) {
+ try {
   initEccLib(ecc)
-
-  const internalPubkey = toXOnly(Buffer.from(publicKey, 'hex'))
-  const tweakedPubkey = signer.publicKey
+  const {address,signer}=legacyInfo
+  const {taprootSigner}=taprootInfo
+ 
+  const tweakedPubkey = taprootSigner.publicKey
   const tweakedXOnly = toXOnly(tweakedPubkey)
-  const output = toOutputScript(address, typedNetwork)
+  // const output = toOutputScript(address, typedNetwork)
   const utxos = await fetchUtxos(address)
-  console.log({ utxos })
-
-  // 写数据
+  if(!utxos.length){
+    throw new Error(`Insufficient balance. You can use the /topup command to get the BTC address for recharging and continue operations.`)
+  }
+  const body={
+    content:content,
+    contentType:'text/plain',
+    
+  }
+ 
   const metaidData: MetaIdData = {
-    body: content,
-    path: '/protocols/simplebuzz',
+    body: JSON.stringify(body),
+    path: `${HOST}:/protocols/simplebuzz`,
     flag: 'metaid',
     version: '1.0.0',
     operation: 'create',
@@ -39,6 +142,8 @@ export async function createBuzz(
     encoding: 'utf-8',
   }
   const pinScript = createScript(metaidData, tweakedXOnly)
+
+  
   const redeem = {
     output: pinScript,
     redeemVersion: LEAF_VERSION_TAPSCRIPT,
@@ -51,47 +156,53 @@ export async function createBuzz(
     internalPubkey: tweakedXOnly,
     network: typedNetwork,
   })
+  
+  const preTxRaw=await fetchUtxosRaw(utxos[0].txId, literalNetwork)
+  const preTx=bitcoin.Transaction.fromHex(preTxRaw)
+  
 
-  // 拿一个 utxo 创建 546 sat 的交易
   const commitFakePsbt = new Psbt({ network: typedNetwork })
   commitFakePsbt.addInput({
     hash: utxos[0].txId,
     index: utxos[0].vout,
-    witnessUtxo: {
-      script: output,
-      value: utxos[0].satoshi,
-    },
-    tapInternalKey: internalPubkey,
+    nonWitnessUtxo:preTx.toBuffer(),
+    // witnessUtxo: {
+    //   script: output,
+    //   value: utxos[0].satoshi,
+    // },
   })
+  commitFakePsbt.addOutput({
+    address:address, //address,
+    value: 546,
+  })
+  // // change
   commitFakePsbt.addOutput({
     address: address,
     value: 546,
   })
-  // change
-  commitFakePsbt.addOutput({
-    address: address,
-    value: 546,
-  })
-  commitFakePsbt.signInput(0, signer).finalizeAllInputs()
-  const commitFakeTx = commitFakePsbt.extractTransaction(true)
-  // get size of the transaction
-  const commitFakeTxSize = commitFakeTx.virtualSize()
+  commitFakePsbt.signInput(0, {
+    publicKey: Buffer.from(signer.publicKey),
+    sign:(hash)=>{
+      const signature = signer.sign(hash);
+      return Buffer.from(signature); 
+    }
+  }).finalizeAllInputs()
+   const commitFakeTx = commitFakePsbt.extractTransaction(true)
+  // // get size of the transaction
+   const commitFakeTxSize = commitFakeTx.virtualSize()
 
-  // 获取费率，计算手续费
+  
   const feeRate = await fetchFeeRate()
   const fee = feeRate > 1 ? feeRate * commitFakeTxSize : commitFakeTxSize + 1 // prevent fee rate too low
-  const changeValue = utxos[0].satoshi - 546 - fee
+    const changeValue = utxos[0].satoshi - 546 - fee
 
-  // 构建真正交易
+
   const commitPsbt = new Psbt({ network: typedNetwork })
   commitPsbt.addInput({
     hash: utxos[0].txId,
     index: utxos[0].vout,
-    witnessUtxo: {
-      script: output,
-      value: utxos[0].satoshi,
-    },
-    tapInternalKey: internalPubkey,
+    nonWitnessUtxo:preTx.toBuffer(),
+   
   })
   commitPsbt.addOutput({
     script: pinOutputScript,
@@ -104,19 +215,31 @@ export async function createBuzz(
 
   if (changeValue >= 546) {
     commitPsbt.addOutput({
-      address: address,
+      address:address, 
       value: changeValue,
     })
   }
 
-  // 签名
-  commitPsbt.signInput(0, signer).finalizeAllInputs()
-  const commitTx = commitPsbt.extractTransaction()
-  const commitTxid = commitTx.getId()
 
-  // 构造假 reveal 交易
+  commitPsbt.signInput(0,{
+    publicKey: Buffer.from(signer.publicKey),
+    sign:(hash)=>{
+      const signature = signer.sign(hash);
+      return Buffer.from(signature); 
+    }
+  }).finalizeAllInputs()
+   const commitTx = commitPsbt.extractTransaction()
+
+   const commitTxid = commitTx.getId()
+
+   const tx1 = await broadcast(commitTx.toHex(),'btc')
+
+   await sleep(1000)
+   const preCommitTxRaw=await fetchUtxosRaw(tx1, literalNetwork)
+   const preCommitTx=bitcoin.Transaction.fromHex(preCommitTxRaw)
+
+
   const revealFakePsbt = new Psbt({ network: typedNetwork })
-
   revealFakePsbt.addInput({
     hash: commitTxid,
     index: 0,
@@ -133,18 +256,15 @@ export async function createBuzz(
     ],
   })
 
-  // 添加钱 Input
+
+ 
   revealFakePsbt.addInput({
     hash: commitTxid,
     index: 1,
-    witnessUtxo: {
-      script: output,
-      value: changeValue,
-    },
-    tapInternalKey: internalPubkey,
+    nonWitnessUtxo:preCommitTx.toBuffer()
   })
 
-  // 添加铭刻 output
+  
   revealFakePsbt.addOutput({
     address,
     value: 546,
@@ -154,16 +274,20 @@ export async function createBuzz(
     address,
     value: 546,
   })
-  revealFakePsbt.signInput(0, signer).signInput(1, signer).finalizeAllInputs()
+  revealFakePsbt.signInput(0,taprootSigner)
+  revealFakePsbt.signInput(1,{
+    publicKey: Buffer.from(signer.publicKey),
+    sign:(hash)=>{
+      const signature = signer.sign(hash);
+      return Buffer.from(signature); 
+    }
+  })
+  revealFakePsbt.finalizeAllInputs()
   const revealFakeTx = revealFakePsbt.extractTransaction(true)
-  // get size of the transaction
+ 
   const revealFakeTxSize = revealFakeTx.virtualSize()
-
-  console.log({ feeRate, commitFakeTxSize, revealFakeTxSize })
-
   const revealFee = feeRate * revealFakeTxSize
   const revealChangeValue = changeValue - revealFee
-
   if (changeValue >= 546) {
     revealPsbt.addOutput({
       address: address,
@@ -171,14 +295,34 @@ export async function createBuzz(
     })
   }
 
-  revealPsbt.signInput(0, signer).signInput(1, signer).finalizeAllInputs()
-  const revealTx = revealPsbt.extractTransaction()
+ revealPsbt.signInput(0,taprootSigner)
+ revealPsbt.signInput(1,{
+  publicKey: Buffer.from(signer.publicKey),
+  sign:(hash)=>{
+    const signature = signer.sign(hash);
+    return Buffer.from(signature); 
+  }
+})
+ revealPsbt.finalizeAllInputs()
+const revealTx = revealPsbt.extractTransaction()
+const tx2 = await broadcast(revealTx.toHex(),'btc')
+if(!tx2){
+  throw new Error(`Broadcast failed`)
+ }
+ return {
+  address:address,
+  txid:tx2,
+  pinid:`${tx2}i0`,
+  chain:'btc'
+ }
 
-  const tx1 = await broadcast(commitTx.toHex())
-  await sleep(1000)
-  const tx2 = await broadcast(revealTx.toHex())
-  console.log({ tx1, tx2 })
-
-  const bitbuzzHost = isTestnet ? 'testnet.bitbuzz.io' : 'bitbuzz.io'
-  return `https://${bitbuzzHost}/buzz/${tx2}i0`
+ } catch (error) {
+  throw new Error(error)
+ }
 }
+
+
+
+
+
+

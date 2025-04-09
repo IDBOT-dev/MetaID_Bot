@@ -15,11 +15,11 @@ import { Context } from '../interfaces/context.interface'
 import { ReverseTextPipe } from '../common/pipes/reverse-text.pipe'
 import { ResponseTimeInterceptor } from '../common/interceptors/response-time.interceptor'
 import { AdminGuard } from '../common/guards/admin.guard'
-import { TelegrafExceptionFilter } from '../common/filters/telegraf-exception.filter'
+//import { TelegrafExceptionFilter } from '../common/filters/telegraf-exception.filter'
 
 @Update()
-@UseInterceptors(ResponseTimeInterceptor)
-@UseFilters(TelegrafExceptionFilter)
+ @UseInterceptors(ResponseTimeInterceptor)
+//@UseFilters(TelegrafExceptionFilter)
 export class EchoUpdate {
   constructor(
     @InjectBot(GreeterBotName)
